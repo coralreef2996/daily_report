@@ -100,9 +100,11 @@ flutter:
   # see https://flutter.dev/to/font-from-package
 
 flutter_launcher_icons:
-  android: true
+  android: "ic_launcher"
   ios: true
   image_path: "assets/daily_report.png"
+  adaptive_icon_background: "assets/daily_report.png"
+  adaptive_icon_foreground: "assets/daily_report.png"
   web:
     generate: true
     image_path: "assets/daily_report.png"

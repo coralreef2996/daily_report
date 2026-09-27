@@ -2025,6 +2025,27 @@ class AppTheme {
         seedColor: AppColors.primary,
         surface: Colors.white,
       ),
+      appBarTheme: const AppBarTheme(
+        backgroundColor: Colors.white,
+        surfaceTintColor: Colors.white,
+        foregroundColor: Color(0xFF1A1A1A),
+        elevation: 0,
+        toolbarHeight: 56.0,
+        centerTitle: true,
+        titleTextStyle: TextStyle(
+          color: Color(0xFF1A1A1A),
+          fontSize: 20.0,
+          fontWeight: FontWeight.bold,
+        ),
+      ),
+      elevatedButtonTheme: ElevatedButtonThemeData(
+        style: ElevatedButton.styleFrom(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16.0),
+          ),
+          elevation: 2,
+        ),
+      ),
       textTheme: GoogleFonts.sawarabiGothicTextTheme().copyWith(
         displayLarge: GoogleFonts.sawarabiGothic(
           fontSize: 32,
@@ -2553,14 +2574,22 @@ class _BubbleWidgetState extends State<BubbleWidget>
         final dx = cos(widget.bubble.angle) * distance;
         final dy = sin(widget.bubble.angle) * distance;
 
-        // 出現時と消滅時にふわっと不透明度を変えます
+        // 出現時と消滅時にふわっと不透明度とスケールを変えます（中央から拡大して外に広がる）
         double opacity = 1.0;
-        if (distance < 50) opacity = distance / 50;
-        if (distance > 350) opacity = 1.0 - ((distance - 350) / 50);
+        double scale = 1.0;
+        if (distance < 60) {
+          opacity = distance / 60;
+          scale = (distance / 60).clamp(0.1, 1.0);
+        } else if (distance > 350) {
+          opacity = 1.0 - ((distance - 350) / 50);
+        }
 
         return Transform.translate(
           offset: Offset(dx, dy),
-          child: Opacity(opacity: opacity.clamp(0.0, 1.0), child: child),
+          child: Transform.scale(
+            scale: scale,
+            child: Opacity(opacity: opacity.clamp(0.0, 1.0), child: child),
+          ),
         );
       },
       child: GestureDetector(
@@ -2569,6 +2598,75 @@ class _BubbleWidgetState extends State<BubbleWidget>
       ),
     );
   }
+}
+
+// 利用者共通ヘッダー（設定・使い方）
+Widget buildDailyReportUserHeader(BuildContext context) {
+  return Padding(
+    padding: const EdgeInsets.only(top: 12.0, left: 16.0, right: 16.0, bottom: 12.0),
+    child: Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        OutlinedButton.icon(
+          onPressed: () {},
+          style: OutlinedButton.styleFrom(
+            backgroundColor: Colors.white,
+            foregroundColor: const Color(0xFF002850),
+            side: BorderSide(color: const Color(0xFF002850).withOpacity(0.5)),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16.0)),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+          ),
+          icon: const Icon(Icons.settings, size: 18),
+          label: const Text('設定'),
+        ),
+        PopupMenuButton<String>(
+          color: Colors.white,
+          surfaceTintColor: Colors.white,
+          onSelected: (String value) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                backgroundColor: const Color(0xFF002850),
+                content: Text('$value が選択されました', style: const TextStyle(color: Colors.white)),
+                duration: const Duration(seconds: 2),
+              ),
+            );
+          },
+          itemBuilder: (BuildContext context) => <PopupMenuEntry<String>>[
+            const PopupMenuItem<String>(
+              value: '使い方１',
+              child: Text('使い方１', style: TextStyle(color: Color(0xFF002850))),
+            ),
+            const PopupMenuItem<String>(
+              value: '使い方２',
+              child: Text('使い方２', style: TextStyle(color: Color(0xFF002850))),
+            ),
+            const PopupMenuItem<String>(
+              value: '使い方３',
+              child: Text('使い方３', style: TextStyle(color: Color(0xFF002850))),
+            ),
+          ],
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16.0),
+              border: Border.all(color: const Color(0xFF002850).withOpacity(0.5)),
+            ),
+            child: const Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.help_outline, size: 18, color: Color(0xFF002850)),
+                SizedBox(width: 6),
+                Text('使い方', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Color(0xFF002850))),
+                SizedBox(width: 4),
+                Icon(Icons.arrow_drop_down, size: 18, color: Color(0xFF002850)),
+              ],
+            ),
+          ),
+        ),
+      ],
+    ),
+  );
 }
 
 // -----------------------------------------------------------------------------
@@ -2630,21 +2728,19 @@ class _GameScreenState extends ConsumerState<GameScreen> {
             title: const Text('今の気持ちを自由に書いてください'),
             content: TextField(
               controller: controller,
-              maxLines: 3,
               autofocus: true,
               decoration: const InputDecoration(
-                hintText: 'ここに書き込みます...',
-                border: OutlineInputBorder(),
+                hintText: '例：今日は集中できた、少し疲れた など',
               ),
             ),
             actions: [
               TextButton(
-                onPressed: () => Navigator.pop(context),
+                onPressed: () => Navigator.of(context).pop(),
                 child: const Text('キャンセル'),
               ),
-              TextButton(
-                onPressed: () => Navigator.pop(context, controller.text),
-                child: const Text('OK'),
+              FilledButton(
+                onPressed: () => Navigator.of(context).pop(controller.text),
+                child: const Text('決定'),
               ),
             ],
           ),
@@ -2667,16 +2763,34 @@ class _GameScreenState extends ConsumerState<GameScreen> {
       });
     }
 
-    return Scaffold(
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, result) {
+        if (!didPop) {
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(
+              builder: (context) => const LoginScreen(
+                appName: '日報作成',
+                originalHome: GameScreen(),
+              ),
+            ),
+          );
+        }
+      },
+      child: Scaffold(
       appBar: AppBar(
-        title: Text(
+        title: const Text(
           '日報作成',
-          style: GoogleFonts.sawarabiGothic(
-            color: AppColors.textPrimary,
+          style: TextStyle(
+            color: Color(0xFF1A1A1A),
+            fontSize: 20.0,
             fontWeight: FontWeight.bold,
           ),
         ),
+        toolbarHeight: 56.0,
         backgroundColor: Colors.white,
+        surfaceTintColor: Colors.white,
         elevation: 0,
         centerTitle: true,
         bottom: PreferredSize(
@@ -2700,32 +2814,39 @@ class _GameScreenState extends ConsumerState<GameScreen> {
           const SizedBox(width: 8),
         ],
       ),
-      body: Stack(
-        children: [
-          // 背景のグラデーション
-          Container(
-            decoration: const BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: [Color(0xFFFFFFFF), Color(0xFFBFDFFF)],
-              ),
-            ),
+      body: Container(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [Color(0xFFFFFFFF), Color(0xFFBFDFFF)],
           ),
-
-          // 中央に配置された雲（質問）
-          Center(
-            child: CloudWidget(
-              text: gameState.currentQuestion,
-              emotion: gameState.currentEmotion,
-            ),
-          ),
+        ),
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            return SingleChildScrollView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              child: Column(
+                children: [
+                  buildDailyReportUserHeader(context),
+                  SizedBox(
+                    height: constraints.maxHeight,
+                    child: Stack(
+                      children: [
+                        // 中央に配置された雲（質問）
+                        Center(
+                          child: CloudWidget(
+                            text: gameState.currentQuestion,
+                            emotion: gameState.currentEmotion,
+                          ),
+                        ),
 
           // 周囲に浮かぶバブル
           ...gameState.bubbles.map((bubble) {
             final isTapped = _tappedBubbleId == bubble.id;
             return Center(
               child: BubbleWidget(
+                key: ValueKey(bubble.id),
                 bubble: bubble,
                 isExiting: _isExiting,
                 isTapped: isTapped,
@@ -2828,8 +2949,16 @@ class _GameScreenState extends ConsumerState<GameScreen> {
           ),
         ],
       ),
-    );
-  }
+    ),
+  ],
+),
+            );
+          },
+        ),
+      ),
+    ),
+  );
+}
 
   // 速度変更ボタンを構築するヘルパーメソッドです
   Widget _buildSpeedButton(
@@ -2929,56 +3058,73 @@ class _ResultScreenState extends State<ResultScreen> {
       child: Scaffold(
         backgroundColor: Colors.transparent,
         appBar: AppBar(
-          title: const Text('今日の結果'),
-          backgroundColor: Colors.transparent,
+          title: const Text(
+            '今日の結果',
+            style: TextStyle(
+              color: Color(0xFF1A1A1A),
+              fontSize: 20.0,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          toolbarHeight: 56.0,
+          backgroundColor: Colors.white,
+          surfaceTintColor: Colors.white,
           elevation: 0,
+          centerTitle: true,
         ),
         body: SingleChildScrollView(
-          padding: const EdgeInsets.all(24),
           child: Column(
             children: [
-              // スコア表示
-              _buildScoreSection(),
-              const SizedBox(height: 32),
+              buildDailyReportUserHeader(context),
+              Padding(
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  children: [
+                    // スコア表示
+                    _buildScoreSection(),
+                    const SizedBox(height: 32),
 
-              // AIによる要約セクション（FutureBuilderを使って非同期で取得）
-              FutureBuilder<String>(
-                future: AIService.generateSummary(widget.gameState.score),
-                builder: (context, snapshot) {
-                  if (snapshot.connectionState == ConnectionState.waiting) {
-                    return const Center(child: CircularProgressIndicator());
-                  }
-                  return _buildAISection(snapshot.data ?? "");
-                },
-              ),
-              const SizedBox(height: 32),
+                    // AIによる要約セクション（FutureBuilderを使って非同期で取得）
+                    FutureBuilder<String>(
+                      future: AIService.generateSummary(widget.gameState.score),
+                      builder: (context, snapshot) {
+                        if (snapshot.connectionState == ConnectionState.waiting) {
+                          return const Center(child: CircularProgressIndicator());
+                        }
+                        return _buildAISection(snapshot.data ?? "");
+                      },
+                    ),
+                    const SizedBox(height: 32),
 
-              // 会話履歴セクション
-              _buildHistorySection(),
-              const SizedBox(height: 40),
+                    // 会話履歴セクション
+                    _buildHistorySection(),
+                    const SizedBox(height: 40),
 
-              // ホームに戻るボタン
-              ElevatedButton(
-                onPressed: _isSaving ? null : _handleSave,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.textPrimary,
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 40,
-                    vertical: 16,
-                  ),
+                    // ホームに戻るボタン
+                    ElevatedButton(
+                      onPressed: _isSaving ? null : _handleSave,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.textPrimary,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 40,
+                          vertical: 16,
+                        ),
+                      ),
+                      child:
+                          _isSaving
+                              ? const SizedBox(
+                                width: 20,
+                                height: 20,
+                                child: CircularProgressIndicator(
+                                  color: Colors.white,
+                                  strokeWidth: 2,
+                                ),
+                              )
+                              : const Text('これを記録する'),
+                    ),
+                  ],
                 ),
-                child:
-                    _isSaving
-                        ? const SizedBox(
-                          width: 20,
-                          height: 20,
-                          child: CircularProgressIndicator(
-                            color: Colors.white,
-                            strokeWidth: 2,
-                          ),
-                        )
-                        : const Text('これを記録する'),
               ),
             ],
           ),
@@ -3044,34 +3190,335 @@ class _ResultScreenState extends State<ResultScreen> {
   }
 
   Widget _buildHistoryCard(ConversationEntry entry) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        border: Border.all(color: Colors.grey.shade200),
-        borderRadius: BorderRadius.circular(12),
+    return buildQAHistoryCard(entry);
+  }
+}
+
+/// 利用者のトップページ（作業選択と各種メニューへのナビゲーション）
+class UserHomeScreen extends StatefulWidget {
+  const UserHomeScreen({super.key});
+
+  @override
+  State<UserHomeScreen> createState() => _UserHomeScreenState();
+}
+
+class _UserHomeScreenState extends State<UserHomeScreen> {
+  final List<String> _workOptions = [
+    'イラスト',
+    'DTM',
+    '３Dモデリング',
+    'Web制作',
+    'プログラミング',
+    'データ入力',
+    'その他',
+  ];
+  late String _selectedWork;
+
+  @override
+  void initState() {
+    super.initState();
+    _selectedWork = _workOptions.first;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text(
+          '日報作成',
+          style: TextStyle(
+            color: Color(0xFF1A1A1A),
+            fontSize: 20.0,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        toolbarHeight: 56.0,
+        backgroundColor: Colors.white,
+        surfaceTintColor: Colors.white,
+        elevation: 0,
+        centerTitle: true,
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Q: ${entry.question}',
-            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+      body: Container(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [Colors.white, Color(0xFFBFDFFF)],
           ),
-          const SizedBox(height: 4),
-          Text(
-            'A: ${entry.answer}',
-            style: const TextStyle(color: AppColors.textSecondary),
-          ),
-          if (entry.freeInputContent != null) ...[
-            const SizedBox(height: 4),
-            Text(
-              '内容: ${entry.freeInputContent}',
-              style: const TextStyle(fontStyle: FontStyle.italic),
+        ),
+        child: SingleChildScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          padding: const EdgeInsets.only(top: 12.0, left: 16.0, right: 16.0, bottom: 24.0),
+          child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                // 「設定」「使い方」トップヘッダー (管理者カラー: ブルー)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 12.0),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      OutlinedButton.icon(
+                        onPressed: () {},
+                        style: OutlinedButton.styleFrom(
+                          backgroundColor: Colors.white,
+                          foregroundColor: const Color(0xFF002850),
+                          side: BorderSide(color: const Color(0xFF002850).withOpacity(0.5)),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16.0)),
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                        ),
+                        icon: const Icon(Icons.settings, size: 18),
+                        label: const Text('設定'),
+                      ),
+                      PopupMenuButton<String>(
+                        color: Colors.white,
+                        surfaceTintColor: Colors.white,
+                        onSelected: (String value) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              backgroundColor: const Color(0xFF002850),
+                              content: Text('$value が選択されました', style: const TextStyle(color: Colors.white)),
+                              duration: const Duration(seconds: 2),
+                            ),
+                          );
+                        },
+                        itemBuilder: (BuildContext context) => <PopupMenuEntry<String>>[
+                          const PopupMenuItem<String>(
+                            value: '使い方１',
+                            child: Text('使い方１', style: TextStyle(color: Color(0xFF002850))),
+                          ),
+                          const PopupMenuItem<String>(
+                            value: '使い方２',
+                            child: Text('使い方２', style: TextStyle(color: Color(0xFF002850))),
+                          ),
+                          const PopupMenuItem<String>(
+                            value: '使い方３',
+                            child: Text('使い方３', style: TextStyle(color: Color(0xFF002850))),
+                          ),
+                        ],
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(16.0),
+                            border: Border.all(color: const Color(0xFF002850).withOpacity(0.5)),
+                          ),
+                          child: const Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.help_outline, size: 18, color: Color(0xFF002850)),
+                              SizedBox(width: 6),
+                              Text('使い方', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Color(0xFF002850))),
+                              SizedBox(width: 4),
+                              Icon(Icons.arrow_drop_down, size: 18, color: Color(0xFF002850)),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 8),
+                // タイトルエリア
+                Text(
+                  '今日の作業選択',
+                  style: GoogleFonts.sawarabiGothic(
+                    fontSize: 28,
+                    fontWeight: FontWeight.bold,
+                    color: const Color(0xFF002850),
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  '今日取り組む作業を選択して日報を始めましょう',
+                  style: GoogleFonts.sawarabiGothic(
+                    fontSize: 14,
+                    color: Colors.black54,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 36),
+
+                // 作業選択カード
+                Card(
+                  elevation: 4,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.all(20.0),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Row(
+                          children: [
+                            Icon(Icons.work_outline, color: Color(0xFF002850)),
+                            SizedBox(width: 8),
+                            Text(
+                              '今日の作業内容',
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                                color: Color(0xFF002850),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 16),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: Colors.grey.shade100,
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: const Color(0xFF002850).withValues(alpha: 0.3)),
+                          ),
+                          child: DropdownButtonHideUnderline(
+                            child: DropdownButton<String>(
+                              value: _selectedWork,
+                              isExpanded: true,
+                              icon: const Icon(Icons.arrow_drop_down, color: Color(0xFF002850)),
+                              items: _workOptions.map((String work) {
+                                return DropdownMenuItem<String>(
+                                  value: work,
+                                  child: Text(
+                                    work,
+                                    style: const TextStyle(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.w600,
+                                      color: Color(0xFF002850),
+                                    ),
+                                  ),
+                                );
+                              }).toList(),
+                              onChanged: (String? newValue) {
+                                if (newValue != null) {
+                                  setState(() {
+                                    _selectedWork = newValue;
+                                  });
+                                }
+                              },
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 24),
+
+                // 日報入力スタートボタン
+                ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF002850),
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    elevation: 4,
+                  ),
+                  onPressed: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => const GameScreen(),
+                      ),
+                    );
+                  },
+                  child: const Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.play_circle_fill, size: 24),
+                      SizedBox(width: 8),
+                      Text(
+                        '日報作成をはじめる',
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 24),
+
+                // カレンダー履歴へのリンクカード
+                InkWell(
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => const CalendarScreen(),
+                      ),
+                    );
+                  },
+                  borderRadius: BorderRadius.circular(16),
+                  child: Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(16),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.05),
+                          blurRadius: 10,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
+                      border: Border.all(color: Colors.blue.shade100),
+                    ),
+                    child: Row(
+                      children: [
+                        Container(
+                          padding: EdgeInsets.all(10),
+                          decoration: BoxDecoration(
+                            color: Color(0xFFE0F2FE),
+                            shape: BoxShape.circle,
+                          ),
+                          child: Icon(
+                            Icons.calendar_month,
+                            color: Color(0xFF0284C7),
+                            size: 28,
+                          ),
+                        ),
+                        SizedBox(width: 16),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'カレンダー履歴',
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold,
+                                  color: Color(0xFF002850),
+                                ),
+                              ),
+                              SizedBox(height: 4),
+                              Text(
+                                '過去の日報や記録を確認します',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: Colors.black54,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        Icon(
+                          Icons.chevron_right,
+                          color: Color(0xFF002850),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 20),
+              ],
             ),
-          ],
-        ],
-      ),
+          ),
+        ),
     );
   }
 }
@@ -3088,6 +3535,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
   DateTime _focusedDay = DateTime.now();
   DateTime? _selectedDay;
   Map<DateTime, DiaryEntry> _entries = {};
+  CalendarFormat _calendarFormat = CalendarFormat.month;
 
   @override
   void initState() {
@@ -3120,64 +3568,95 @@ class _CalendarScreenState extends State<CalendarScreen> {
       child: Scaffold(
         backgroundColor: Colors.transparent,
         appBar: AppBar(
-          title: const Text('カレンダー履歴'),
-          backgroundColor: Colors.transparent,
+          title: const Text(
+            'カレンダー履歴',
+            style: TextStyle(
+              color: Color(0xFF1A1A1A),
+              fontSize: 20.0,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          toolbarHeight: 56.0,
+          backgroundColor: Colors.white,
+          surfaceTintColor: Colors.white,
           elevation: 0,
+          centerTitle: true,
         ),
-        body: Column(
-          children: [
-            // カレンダーウィジェット
-            TableCalendar(
-              firstDay: DateTime.utc(2024, 1, 1),
-              lastDay: DateTime.utc(2030, 12, 31),
-              focusedDay: _focusedDay,
-              selectedDayPredicate: (day) => isSameDay(_selectedDay, day),
-              onDaySelected: (selectedDay, focusedDay) {
-                setState(() {
-                  _selectedDay = selectedDay;
-                  _focusedDay = focusedDay;
-                });
-              },
-              // 日誌がある日にマーク（ドット）を表示します
-              eventLoader: (day) {
-                final d = DateTime(day.year, day.month, day.day);
-                return _entries.containsKey(d) ? [true] : [];
-              },
-              calendarStyle: const CalendarStyle(
-                todayDecoration: BoxDecoration(
-                  color: AppColors.primary,
-                  shape: BoxShape.circle,
-                ),
-                selectedDecoration: BoxDecoration(
-                  color: AppColors.textPrimary,
-                  shape: BoxShape.circle,
-                ),
-                markerDecoration: BoxDecoration(
-                  color: Colors.orange,
-                  shape: BoxShape.circle,
+        body: SingleChildScrollView(
+          child: Column(
+            children: [
+              buildDailyReportUserHeader(context),
+              // カレンダーウィジェット
+                    TableCalendar(
+                      firstDay: DateTime.utc(2024, 1, 1),
+                      lastDay: DateTime.utc(2030, 12, 31),
+                      focusedDay: _focusedDay,
+                      calendarFormat: _calendarFormat,
+                      availableGestures: AvailableGestures.horizontalSwipe,
+                      onFormatChanged: (format) {
+                        setState(() {
+                          _calendarFormat = format;
+                        });
+                      },
+                      selectedDayPredicate: (day) => isSameDay(_selectedDay, day),
+                      onDaySelected: (selectedDay, focusedDay) {
+                        setState(() {
+                          _selectedDay = selectedDay;
+                          _focusedDay = focusedDay;
+                        });
+                      },
+                      // 日誌がある日にマーク（ドット）を表示します
+                      eventLoader: (day) {
+                        final d = DateTime(day.year, day.month, day.day);
+                        return _entries.containsKey(d) ? [true] : [];
+                      },
+                      calendarStyle: const CalendarStyle(
+                        todayDecoration: BoxDecoration(
+                          color: AppColors.primary,
+                          shape: BoxShape.circle,
+                        ),
+                        selectedDecoration: BoxDecoration(
+                          color: AppColors.textPrimary,
+                          shape: BoxShape.circle,
+                        ),
+                        markerDecoration: BoxDecoration(
+                          color: Colors.orange,
+                          shape: BoxShape.circle,
+                        ),
+                      ),
+                    ),
+                    const Divider(),
+                    // 選択された日の内容を表示
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 24),
+                      child: _buildEntryDetail(_selectedDay),
+                    ),
+                  ],
                 ),
               ),
             ),
-            const Divider(),
-            // 選択された日の内容を表示
-            Expanded(child: _buildEntryDetail(_selectedDay)),
-          ],
-        ),
-      ),
-    );
-  }
+          );
+        }
 
   Widget _buildEntryDetail(DateTime? day) {
-    if (day == null) return const Center(child: Text('日付を選択してください'));
+    if (day == null) {
+      return const Padding(
+        padding: EdgeInsets.all(32),
+        child: Center(child: Text('日付を選択してください')),
+      );
+    }
 
     final dateKey = DateTime(day.year, day.month, day.day);
     final entry = _entries[dateKey];
 
     if (entry == null) {
-      return const Center(child: Text('この日の記録はありません'));
+      return const Padding(
+        padding: EdgeInsets.all(32),
+        child: Center(child: Text('この日の記録はありません')),
+      );
     }
 
-    return SingleChildScrollView(
+    return Padding(
       padding: const EdgeInsets.all(20),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -3196,10 +3675,77 @@ class _CalendarScreenState extends State<CalendarScreen> {
             spacing: 8,
             children: entry.tags.map((tag) => Chip(label: Text(tag))).toList(),
           ),
+          if (entry.conversationHistory.isNotEmpty) ...[
+            const SizedBox(height: 24),
+            const Text(
+              '振り返り (Q&A)',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: Color(0xFF002850),
+              ),
+            ),
+            const SizedBox(height: 12),
+            ...entry.conversationHistory.map((qa) => buildQAHistoryCard(qa)),
+          ],
         ],
       ),
     );
   }
+}
+
+/// Q&Aの振り返りカードウィジェット（白背景 #FFFFFF、角丸、影付き）
+Widget buildQAHistoryCard(ConversationEntry entry) {
+  return Container(
+    margin: const EdgeInsets.only(bottom: 12),
+    width: double.infinity,
+    padding: const EdgeInsets.all(16),
+    decoration: BoxDecoration(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(12),
+      border: Border.all(color: Colors.blue.shade100),
+      boxShadow: [
+        BoxShadow(
+          color: Colors.black.withValues(alpha: 0.05),
+          blurRadius: 6,
+          offset: const Offset(0, 2),
+        ),
+      ],
+    ),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Q: ${entry.question}',
+          style: const TextStyle(
+            fontWeight: FontWeight.bold,
+            fontSize: 14,
+            color: Color(0xFF002850),
+          ),
+        ),
+        const SizedBox(height: 6),
+        Text(
+          'A: ${entry.answer}',
+          style: const TextStyle(
+            color: AppColors.textSecondary,
+            fontWeight: FontWeight.w500,
+            fontSize: 14,
+          ),
+        ),
+        if (entry.freeInputContent != null) ...[
+          const SizedBox(height: 6),
+          Text(
+            '内容: ${entry.freeInputContent}',
+            style: const TextStyle(
+              fontStyle: FontStyle.italic,
+              color: Colors.black87,
+              fontSize: 13,
+            ),
+          ),
+        ],
+      ],
+    ),
+  );
 }
 
 // -----------------------------------------------------------------------------
@@ -3229,7 +3775,7 @@ class MyApp extends StatelessWidget {
       theme: AppTheme.lightTheme, // 定義したテーマを適用します
       home: const LoginScreen(
         appName: '日報作成',
-        originalHome: GameScreen(),
+        originalHome: UserHomeScreen(),
       ), // 最初に表示する画面
     );
   }
